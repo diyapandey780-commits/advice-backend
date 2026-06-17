@@ -16,6 +16,21 @@ app.use(express.json());
 app.use(cors());
 app.use(express.json());
 
+app.get('/', (req, res) => {
+  res.json({ 
+    message: 'Advice API is running!',
+    endpoints: {
+      test: '/api/test',
+      professionals: '/api/professionals',
+      register: '/api/auth/register (POST)',
+      login: '/api/auth/login (POST)',
+      bookings: '/api/bookings (POST)'
+    }
+  });
+});
+
+
+
 // Test endpoint
 app.get('/api/test', (req, res) => {
   res.json({ message: 'API is working!' });
