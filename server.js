@@ -8,14 +8,15 @@ const pool = require('./db');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-app.use(cors());
-app.use(express.json());
-
-
 // Middleware
 app.use(cors());
 app.use(express.json());
 
+// ============================================
+// TEST ENDPOINTS
+// ============================================
+
+// Root endpoint
 app.get('/', (req, res) => {
   res.json({ 
     message: 'Advice API is running!',
@@ -29,91 +30,12 @@ app.get('/', (req, res) => {
   });
 });
 
-
-
 // Test endpoint
 app.get('/api/test', (req, res) => {
   res.json({ message: 'API is working!' });
 });
-// ============================================
-// 1. REGISTER ENDPOINT
-// ============================================
-app.post('/api/auth/register', async (req, res) => {
-  try {
-    const { name, email, password, role } = req.body;
-    
-    // Check if user exists
-    const userCheck = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-    if (userCheck.rows.length > 0) {
-      return res.status(400).json({ error: 'User already exists' });
-    }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
-    
-    // Insert user
-    const result = await pool.query(
-      'INSERT INTO users (name, email, password_hash, role) VALUES ($1, $2, $3, $4) RETURNING id, name, email, role',
-      [name, email, hashedPassword, role]
-    );
-    
-    const user = result.rows[0];
-    
-    // If professional, also create professional profile
-    if (role === 'professional') {
-      await pool.query(
-        'INSERT INTO professionals (user_id, expertise, bio, hourly_rate) VALUES ($1, $2, $3, $4)',
-        [user.id, 'Expert', 'I provide advice in this field', 50]
-      );
-    }
-
-    // Create JWT
-    const token = jwt.sign({ userId: user.id, role: user.role }, process.env.JWT_SECRET);
-    
-    res.status(201).json({ user, token });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// ============================================
-// 2. LOGIN ENDPOINT
-// ============================================
-app.post('/api/auth/login', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    
-    // Find user
-    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-    if (result.rows.length === 0) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-    
-    const user = result.rows[0];
-    
-    // Check password
-    const validPassword = await bcrypt.compare(password, user.password_hash);
-    if (!validPassword) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-    
-    // Create JWT
-    const token = jwt.sign({ userId: user.id, role: user.role }, process.env.JWT_SECRET);
-    
-    res.json({ 
-      user: { id: user.id, name: user.name, email: user.email, role: user.role },
-      token 
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// ============================================
-// 3. GET ALL PROFESSIONALS
-// ============================================
+// Professionals endpoint
 app.get('/api/professionals', async (req, res) => {
   try {
     const result = await pool.query(`
@@ -130,11 +52,78 @@ app.get('/api/professionals', async (req, res) => {
 });
 
 // ============================================
-// 4. CREATE BOOKING
+// 1. REGISTER ENDPOINT
+// ============================================
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { name, email, password, role } = req.body;
+    
+    const userCheck = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    if (userCheck.rows.length > 0) {
+      return res.status(400).json({ error: 'User already exists' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    
+    const result = await pool.query(
+      'INSERT INTO users (name, email, password_hash, role) VALUES ($1, $2, $3, $4) RETURNING id, name, email, role',
+      [name, email, hashedPassword, role]
+    );
+    
+    const user = result.rows[0];
+    
+    if (role === 'professional') {
+      await pool.query(
+        'INSERT INTO professionals (user_id, expertise, bio, hourly_rate) VALUES ($1, $2, $3, $4)',
+        [user.id, 'Expert', 'I provide advice in this field', 50]
+      );
+    }
+
+    const token = jwt.sign({ userId: user.id, role: user.role }, process.env.JWT_SECRET);
+    
+    res.status(201).json({ user, token });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ============================================
+// 2. LOGIN ENDPOINT
+// ============================================
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    
+    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    if (result.rows.length === 0) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    
+    const user = result.rows[0];
+    
+    const validPassword = await bcrypt.compare(password, user.password_hash);
+    if (!validPassword) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    
+    const token = jwt.sign({ userId: user.id, role: user.role }, process.env.JWT_SECRET);
+    
+    res.json({ 
+      user: { id: user.id, name: user.name, email: user.email, role: user.role },
+      token 
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ============================================
+// 3. CREATE BOOKING
 // ============================================
 app.post('/api/bookings', async (req, res) => {
   try {
-    // Get user from JWT (we'll add middleware later, for now just get from body)
     const { client_id, professional_id, booking_date, message } = req.body;
     
     const result = await pool.query(
@@ -150,7 +139,7 @@ app.post('/api/bookings', async (req, res) => {
 });
 
 // ============================================
-// 5. GET BOOKINGS FOR A USER
+// 4. GET BOOKINGS FOR A USER
 // ============================================
 app.get('/api/bookings/:user_id', async (req, res) => {
   try {
@@ -174,9 +163,9 @@ app.get('/api/bookings/:user_id', async (req, res) => {
 });
 
 // ============================================
-// START SERVER + CREATE TABLES
+// START SERVER
 // ============================================
-const createTables = async () => {
+const startServer = async () => {
   try {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
@@ -213,7 +202,6 @@ const createTables = async () => {
     
     console.log('✅ Tables created successfully');
     
-    // Insert sample professionals if none exist
     const count = await pool.query('SELECT COUNT(*) FROM professionals');
     if (parseInt(count.rows[0].count) === 0) {
       await pool.query(`
@@ -232,10 +220,12 @@ const createTables = async () => {
     
     app.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`🔗 Test: http://localhost:${PORT}/api/test`);
+      console.log(`🔗 Professionals: http://localhost:${PORT}/api/professionals`);
     });
   } catch (error) {
-    console.error('❌ Error creating tables:', error);
+    console.error('❌ Error:', error.message);
   }
 };
 
-createTables();
+startServer();
